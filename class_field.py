@@ -29,34 +29,69 @@ class Field:
                 row.append(Cell(matrix[i][j], j, i))
             self.__cells.append(row)
 
+    def __isDegenerate(self):
+        filled_cells_amount = 0
+        for cell in np.array(self.__cells).flatten():
+            if not cell.isEmpty():
+                filled_cells_amount += 1
+        return self.__rows + self.__cols - 1 != filled_cells_amount
+
+    def __fixDegenerativity(self):
+        vector = [1, 0, -1, 0]
+        target_x, target_y = None, None
+        for cell in np.array(self.__cells).flatten():
+            if not cell.isEmpty() and cell.getValue() == self.__supply[cell.getY()]:
+                target_x, target_y = cell.getX(), cell.getY()
+                break
+        extra_cell = None
+        min_price = 10 ** 10  # just big value
+        for i in range(len(vector)):
+            for j in range(len(vector)):
+                try:
+                    if target_y + vector[i] == target_y and target_x + vector[j] == target_x:
+                        continue
+                    current_cell = self.__cells[target_y + vector[i]][target_x + vector[j]]
+                    if not current_cell.isEmpty():
+                        continue
+                    if current_cell.getPrice() <= min_price:
+                        min_price = current_cell.getPrice()
+                        extra_cell = current_cell
+                except IndexError:
+                    pass
+        extra_cell.setValue(0)
+
     def leastCoefficientsMethod(self):
         prices_desc = sorted((np.array(self.__cells)).flatten(), key=lambda cell: cell.getPrice())
+        supply, demand = self.__supply[:], self.__demand[:]
         for cell in prices_desc:
-            if cell.isServed(): continue
+            if cell.isServed():
+                continue
             x = cell.getX()
             y = cell.getY()
             # if supply is greater than demand
-            if self.__supply[y] > self.__demand[x]:
-                cell.setValue(self.__demand[x])
-                self.__supply[y] -= self.__demand[x]
-                self.__demand[x] = 0
+            if supply[y] > demand[x]:
+                cell.setValue(demand[x])
+                supply[y] -= demand[x]
+                demand[x] = 0
                 for i in range(self.__rows):
                     self.__cells[i][x].setServed(True)
             # if demand is greater than supply
-            elif self.__supply[y] < self.__demand[x]:
-                cell.setValue(self.__supply[y])
-                self.__demand[x] -= self.__supply[y]
-                self.__supply[y] = 0
+            elif supply[y] < demand[x]:
+                cell.setValue(supply[y])
+                demand[x] -= supply[y]
+                supply[y] = 0
                 for row_cell in self.__cells[y]:
                     row_cell.setServed(True)
             # if supply equals to demand
-            elif self.__supply[y] == self.__demand[x]:
-                cell.setValue(self.__supply[y])
-                self.__demand[x], self.__supply[y] = 0, 0
+            elif supply[y] == demand[x]:
+                cell.setValue(supply[y])
+                demand[x], supply[y] = 0, 0
                 for i in range(self.__rows):
                     self.__cells[i][x].setServed(True)
                 for row_cell in self.__cells[y]:
                     row_cell.setServed(True)
+        if self.__isDegenerate():
+            self.__fixDegenerativity()
 
     def calculateCellCoeffs(self):
         self.__calculateUVCoeffs(True, 0)
@@ -145,19 +180,17 @@ class Field:
                 else:
                     path[i].setValue(path[i].getValue() + theta)
             else:
-                path[i].setValue(path[i].getValue() - theta)
+                new_value = None if path[i].getValue() - theta == 0 else path[i].getValue() - theta
+                path[i].setValue(new_value)
         return True
-        # for i in range(self.__rows):
-        #     for j in range(self.__cols):
-        #         print(self.__cells[i][j].getValue(), end=' ')
-        #     print()
 
     def getOptimalSchema(self):
         schema = []
         total_price = 0
         for i in range(self.__rows):
             for j in range(self.__cols):
-                if not self.__cells[i][j].isEmpty():
-                    schema.append(f'You should take {self.__cells[i][j].getValue()} amount of product from {i + 1} provider and deliver it to the {j + 1} consumer!')
+                if not self.__cells[i][j].isEmpty() and self.__cells[i][j].getValue() != 0:
+                    schema.append(
+                        f'You should take {self.__cells[i][j].getValue()} amount of product from {i + 1} provider and deliver it to the {j + 1} consumer!')
                     total_price += self.__cells[i][j].getValue() * self.__cells[i][j].getPrice()
         return schema, total_price

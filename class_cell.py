@@ -16,7 +16,7 @@ class Cell:
             self.__empty = False
 
     def setValue(self, new_value):
-        if not new_value or new_value == 0:
+        if new_value is None:
             self.__empty = True
             self.__value = None
             return
@@ -52,4 +52,3 @@ class Cell:
 
     def isServed(self):
         return self.__served
-
